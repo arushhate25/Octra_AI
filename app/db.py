@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS approvals (
     status TEXT,
     approver TEXT
 );
+CREATE TABLE IF NOT EXISTS agent_status (
+    agent_id TEXT PRIMARY KEY,
+    status TEXT,
+    reason TEXT,
+    changed_by TEXT,
+    changed_at REAL
+);
 """
 
 

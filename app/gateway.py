@@ -1,19 +1,23 @@
 from app.tools import TOOLS
 from app.risk import risk_score, decide
-from app.approvals import request_approval, consume_approval, action_fingerprint 
+from app.approvals import request_approval, consume_approval, action_fingerprint
 from app.audit import log_event
+from app.inventory import allowed_tools, is_revoked
 
-PERMISSIONS = {
-    "support_agent": {"read_masked_customer"},
-    "payments_agent": {"read_masked_customer", "initiate_transfer"},
-}
 
 def _execute(agent_id, tool_name, approval_id=None, **kwargs):
-    allowed = PERMISSIONS.get(agent_id, set())
+    # Kill switch first: a revoked agent can do nothing at all.
+    if is_revoked(agent_id):
+        return {"decision": "deny",
+                "reason": f"{agent_id} is revoked (kill switch active)"}
+
+    # Check 1: is this agent allowed to use this tool?
+    allowed = allowed_tools(agent_id)
     if tool_name not in allowed or tool_name not in TOOLS:
         return {"decision": "deny",
                 "reason": f"{agent_id} may not use {tool_name}"}
 
+    # Check 2: how risky is the action?
     score = risk_score(tool_name)
     decision = decide(score)
 
@@ -35,6 +39,7 @@ def _execute(agent_id, tool_name, approval_id=None, **kwargs):
 
     result = TOOLS[tool_name](**kwargs)
     return {"decision": "allow", "risk_score": score, "result": result}
+
 
 def execute(agent_id, tool_name, approval_id=None, **kwargs):
     result = _execute(agent_id, tool_name, approval_id, **kwargs)
