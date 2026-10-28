@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from app.gateway import execute
-from app.approvals import approve
+from app.approvals import approve, list_approvals
 from app.audit import get_entries, verify_log
 from app.auth import authenticate
 
@@ -54,3 +54,7 @@ def get_audit(_: str = Depends(require_role("approver"))):
 def verify_audit(_: str = Depends(require_role("approver"))):
     ok, bad_index = verify_log()
     return {"valid": ok, "first_bad_index": bad_index}
+
+@app.get("/approvals")
+def get_approvals(_: str = Depends(require_role("approver"))):
+    return list_approvals()

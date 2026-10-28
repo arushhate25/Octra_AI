@@ -55,3 +55,12 @@ def test_audit_access_is_restricted():
     assert client.get("/audit/verify", headers=SUPPORT).status_code == 403
     r = client.get("/audit/verify", headers=REVIEWER)
     assert r.json()["valid"] is True
+
+def test_reviewer_can_see_pending_approval_details():
+    r = client.post("/execute", json=TRANSFER, headers=PAYMENTS)
+    rid = r.json()["request_id"]
+    listing = client.get("/approvals", headers=REVIEWER).json()
+    match = [a for a in listing if a["request_id"] == rid][0]
+    assert match["arguments"]["amount"] == 100
+    assert match["status"] == "pending"
+    assert client.get("/approvals", headers=PAYMENTS).status_code == 403

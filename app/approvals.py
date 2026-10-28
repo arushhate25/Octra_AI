@@ -7,23 +7,27 @@ from app.db import db
 
 APPROVAL_TTL_SECONDS = 300  # 5 minutes
 
+
 def action_fingerprint(agent_id, tool_name, kwargs):
     payload = json.dumps(
         {"agent": agent_id, "tool": tool_name, "args": kwargs}, sort_keys=True
     )
     return hashlib.sha256(payload.encode()).hexdigest()
 
+
 def request_approval(agent_id, tool_name, kwargs, risk_score):
     request_id = str(uuid.uuid4())
     with db() as conn:
         conn.execute(
             "INSERT INTO approvals (request_id, fingerprint, agent_id, tool_name,"
-            " risk_score, created_at, status, approver)"
-            " VALUES (?,?,?,?,?,?, 'pending', NULL)",
+            " arguments, risk_score, created_at, status, approver)"
+            " VALUES (?,?,?,?,?,?,?, 'pending', NULL)",
             (request_id, action_fingerprint(agent_id, tool_name, kwargs),
-             agent_id, tool_name, risk_score, time.time()),
+             agent_id, tool_name, json.dumps(kwargs, sort_keys=True),
+             risk_score, time.time()),
         )
     return request_id
+
 
 def approve(request_id, approver_id):
     with db() as conn:
@@ -47,6 +51,7 @@ def approve(request_id, approver_id):
         )
         return True, "approved"
 
+
 def consume_approval(request_id, agent_id, tool_name, kwargs):
     """Called by the gateway just before running. One-time use, atomic."""
     with db() as conn:
@@ -65,3 +70,29 @@ def consume_approval(request_id, agent_id, tool_name, kwargs):
         conn.execute("UPDATE approvals SET status='used' WHERE request_id=?",
                      (request_id,))
         return True, "ok"
+
+
+def list_approvals():
+    now = time.time()
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM approvals ORDER BY created_at DESC"
+        ).fetchall()
+    result = []
+    for r in rows:
+        seconds_left = max(0, int(APPROVAL_TTL_SECONDS - (now - r["created_at"])))
+        status = r["status"]
+        if status == "pending" and seconds_left == 0:
+            status = "expired"
+        result.append({
+            "request_id": r["request_id"],
+            "agent_id": r["agent_id"],
+            "tool_name": r["tool_name"],
+            "arguments": json.loads(r["arguments"]),
+            "risk_score": r["risk_score"],
+            "created_at": r["created_at"],
+            "status": status,
+            "approver": r["approver"],
+            "seconds_left": seconds_left,
+        })
+    return result

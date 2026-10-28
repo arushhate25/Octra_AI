@@ -19,12 +19,14 @@ CREATE TABLE IF NOT EXISTS approvals (
     fingerprint TEXT,
     agent_id TEXT,
     tool_name TEXT,
+    arguments TEXT,
     risk_score REAL,
     created_at REAL,
     status TEXT,
     approver TEXT
 );
 """
+
 
 @contextmanager
 def db():
