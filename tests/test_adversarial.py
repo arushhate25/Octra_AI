@@ -3,8 +3,9 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.gateway import execute
 from app.tools import TOOLS
-from app.approvals import approve, PENDING
-from app.audit import AUDIT_LOG, verify_log
+from app.approvals import approve
+from app.audit import get_entries, verify_log
+from app.db import db
 
 client = TestClient(app)
 REVIEWER = {"X-API-Key": "test-reviewer-key"}
@@ -81,11 +82,11 @@ def test_recipient_swap_after_approval_is_rejected():
     assert r["decision"] == "deny"
 
 
-def test_stale_approval_is_rejected():
+def test_stale_approval_is_rejected(age_approval):
     args = dict(from_id="C001", to_id="C002", amount=100)
     rid = execute("payments_agent", "initiate_transfer", **args)["request_id"]
     approve(rid, "human_reviewer")
-    PENDING[rid]["created_at"] -= 1000   # pretend the approval is old
+    age_approval(rid, 1000)   # pretend the approval is old
     r = execute("payments_agent", "initiate_transfer", approval_id=rid, **args)
     assert r["decision"] == "deny"
 
@@ -93,7 +94,7 @@ def test_stale_approval_is_rejected():
 def test_full_account_number_never_exposed():
     r = execute("support_agent", "read_masked_customer", customer_id="C001")
     assert "1234567890" not in str(r)
-    assert "1234567890" not in str(AUDIT_LOG)
+    assert "1234567890" not in str(get_entries())
 
 
 def test_human_key_cannot_run_tools():
@@ -107,9 +108,7 @@ def test_human_key_cannot_run_tools():
 def test_deleted_audit_entry_is_detected():
     for _ in range(3):
         execute("support_agent", "read_masked_customer", customer_id="C001")
-    removed = AUDIT_LOG.pop(-2)   # attacker deletes a record from the middle
-    try:
-        ok, _ = verify_log()
-        assert not ok
-    finally:
-        AUDIT_LOG.insert(len(AUDIT_LOG) - 1, removed)   # restore for other tests
+    with db() as conn:
+        conn.execute("DELETE FROM audit_log WHERE idx = 1")   # attacker deletes a record
+    ok, _ = verify_log()
+    assert not ok

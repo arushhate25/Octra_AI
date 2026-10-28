@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.gateway import execute
 from app.approvals import approve
-from app.audit import AUDIT_LOG, verify_log
+from app.audit import get_entries, verify_log
 from app.auth import authenticate
 
 app = FastAPI(title="BankGuard AI")
@@ -48,7 +48,7 @@ def approve_request(request_id: str,
 
 @app.get("/audit")
 def get_audit(_: str = Depends(require_role("approver"))):
-    return AUDIT_LOG
+    return get_entries
 
 @app.get("/audit/verify")
 def verify_audit(_: str = Depends(require_role("approver"))):
