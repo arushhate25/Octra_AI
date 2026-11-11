@@ -35,18 +35,24 @@ flowchart LR
 - Automated tests: 42 passing
 
 ## Run it (PowerShell)
-```bash
+```powershell
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-$env:SUPPORT_AGENT_KEY="<random>"
-$env:PAYMENTS_AGENT_KEY="<random>"
-$env:REVIEWER_KEY="<random>"
+
+# once: creates a git-ignored .env file with three random keys
+python make_env.py
+
+# terminal 1: the API
 uvicorn app.main:app --reload
-# second terminal, same REVIEWER_KEY:
-streamlit run dashboard/dashboard.py
+
+# terminal 2: the dashboard
+python -m streamlit run dashboard/dashboard.py
+
+# run the tests
 python -m pytest
 ```
+The API runs on http://127.0.0.1:8000 (test page at /docs). The dashboard runs on http://localhost:8501.
 
 ## Documentation
 - [Threat model](docs/threat_model.md)
